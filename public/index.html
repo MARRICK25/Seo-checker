@@ -152,7 +152,8 @@ function render() {
         <div class="bar"><i style="width:${c.score}%;background:${color(c.score)}"></i></div></div>`).join('')}
       </div>
       <div class="actions">
-        <button class="ghost" onclick="window.print()">Print / save PDF</button>
+        <button class="ghost" id="dl" onclick="downloadReport(this)" style="background:var(--accent);color:#fff;border-color:var(--accent)">Download PDF report</button>
+        <button class="ghost" onclick="window.print()">Print</button>
         <button class="ghost" onclick="copySummary(this)">Copy top issues</button>
       </div>
     </div>
@@ -212,6 +213,90 @@ function renderSpeed(s) {
   </div>
   ${s.screenshot ? `<div><img class="shot" src="${s.screenshot}" alt="How the page looks on a phone"><div class="meta" style="text-align:center">Phone view</div></div>` : ''}
   </div>`;
+}
+
+// ---------- Downloadable PDF report ----------
+const HEX = { pass: '#1f9d55', warn: '#c27c00', fail: '#d64545', info: '#6b7280' };
+const hexFor = (n) => n >= 80 ? HEX.pass : n >= 50 ? HEX.warn : HEX.fail;
+const LABEL = { fail: 'Failed', warn: 'Warning', pass: 'Passed', info: 'Info' };
+
+function loadPdfLib() {
+  if (window.html2pdf) return Promise.resolve();
+  return new Promise((ok, fail) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = ok; s.onerror = () => fail(new Error('Could not load the PDF maker. Check your connection and try again.'));
+    document.head.appendChild(s);
+  });
+}
+
+function reportHtml() {
+  const r = report, s = speedCache;
+  const host = new URL(r.url).hostname.replace(/^www\./, '');
+  const order = { fail: 0, warn: 1, info: 2, pass: 3 };
+  const cats = Object.values(r.categories).filter((c) => c.score !== null);
+  const speed = s && s.scores ? `
+    <h2 style="font-size:16px;margin:22px 0 8px">Speed (Google, mobile)</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:12px"><tr>${Object.entries(s.scores).map(([k, v]) =>
+      `<td style="text-align:center;padding:6px;border:1px solid #e3e6eb"><div style="font-size:20px;font-weight:700;color:${hexFor(v)}">${v}</div>${esc({ performance: 'Performance', seo: 'Google SEO', accessibility: 'Accessibility', 'best-practices': 'Best practices' }[k] || k)}</td>`).join('')}</tr></table>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">${s.metrics.filter((m) => m.value).map((m) =>
+      `<tr><td style="padding:3px 0;border-bottom:1px solid #eee">${esc(m.label)}</td><td style="text-align:right;font-weight:600;border-bottom:1px solid #eee">${esc(m.value)}</td></tr>`).join('')}</table>
+    ${s.opportunities.length ? `<p style="font-size:12px;margin:8px 0 0"><b>Biggest speed wins:</b> ${s.opportunities.slice(0, 5).map((o) => esc(o.title)).join('; ')}.</p>` : ''}` : '';
+  const groups = Object.entries(r.categories).map(([key, cat]) => {
+    const cs = r.checks.filter((c) => c.cat === key && c.id !== 'serp').sort((a, b) => order[a.status] - order[b.status] || b.weight - a.weight);
+    if (!cs.length) return '';
+    return `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#5d6472;margin:18px 0 4px">${esc(cat.label)}${cat.score !== null ? ` · ${cat.score}/100` : ''}</h3>` +
+      cs.map((c) => `<div style="border-top:1px solid #e3e6eb;padding:6px 0;page-break-inside:avoid">
+        <div style="font-size:12.5px"><span style="display:inline-block;min-width:58px;font-weight:700;color:${HEX[c.status]}">${LABEL[c.status]}</span><b>${esc(c.title)}</b></div>
+        <div style="font-size:11.5px;color:#444;margin-left:58px;word-break:break-word">${esc(c.summary)}</div>
+        ${c.fix ? `<div style="font-size:11.5px;margin:3px 0 0 58px;color:#1a3d8f"><b>Fix:</b> ${esc(c.fix)}</div>` : ''}
+      </div>`).join('');
+  }).join('');
+  const preparedBy = (localStorage.getItem('preparedBy') || '').trim();
+  return `<div style="width:816px;box-sizing:border-box;padding:28px 48px;font:13px/1.45 Helvetica,Arial,sans-serif;color:#16181d;background:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #2f6fed;padding-bottom:10px">
+      <div><div style="font-size:22px;font-weight:700">Website Report</div><div style="font-size:14px;color:#5d6472">${esc(host)}</div></div>
+      <div style="text-align:right;font-size:11px;color:#5d6472">${preparedBy ? `Prepared by ${esc(preparedBy)}<br>` : ''}${new Date(r.checkedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+    </div>
+    <div style="display:flex;gap:24px;align-items:center;margin:18px 0">
+      <div style="width:110px;height:110px;border-radius:50%;border:10px solid ${hexFor(r.score)};display:flex;align-items:center;justify-content:center;flex:0 0 auto;box-sizing:border-box">
+        <div style="text-align:center"><div style="font-size:34px;font-weight:700;line-height:1">${r.score}</div><div style="font-size:10px;color:#5d6472">out of 100</div></div></div>
+      <div style="flex:1">
+        <div style="font-size:13px;margin-bottom:8px"><b style="color:${HEX.fail}">${r.counts.fail} failed</b> · <b style="color:${HEX.warn}">${r.counts.warn} warnings</b> · <b style="color:${HEX.pass}">${r.counts.pass} passed</b></div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">${cats.map((c) =>
+          `<tr><td style="padding:2px 0;width:120px">${esc(c.label)}</td><td><div style="height:7px;background:#e3e6eb;border-radius:4px"><div style="height:7px;width:${c.score}%;background:${hexFor(c.score)};border-radius:4px"></div></div></td><td style="width:34px;text-align:right;font-weight:700">${c.score}</td></tr>`).join('')}</table>
+      </div>
+    </div>
+    ${speed}
+    <h2 style="font-size:16px;margin:22px 0 4px">All checks</h2>
+    ${groups}
+    <p style="font-size:10px;color:#888;margin-top:18px">Page checked: ${esc(r.url)}. Speed data from Google PageSpeed Insights.</p>
+  </div>`;
+}
+
+async function downloadReport(btn) {
+  const name = prompt('Your name or business for the report header (optional):', localStorage.getItem('preparedBy') || '');
+  if (name === null) return;
+  try { localStorage.setItem('preparedBy', name); } catch {}
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Making PDF…';
+  try {
+    await loadPdfLib();
+    const host = new URL(report.url).hostname.replace(/^www\./, '');
+    const holder = document.createElement('div');
+    holder.innerHTML = reportHtml();
+    await html2pdf().set({
+      margin: [24, 0, 24, 0],
+      filename: `website-report-${host}-${new Date().toISOString().slice(0, 10)}.pdf`,
+      html2canvas: { scale: 2, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], avoid: 'div[style*="page-break-inside"]' },
+    }).from(holder.firstElementChild).save();
+  } catch (e) {
+    alert(e.message || 'Could not create the PDF.');
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
 }
 
 function copySummary(btn) {
