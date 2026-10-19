@@ -1,0 +1,14 @@
+{
+  "name": "seo-checker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Free one-page SEO audit tool (Vercel serverless)",
+  "scripts": {
+    "dev": "node dev-server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "cheerio": "1.0.0"
+  }
+}

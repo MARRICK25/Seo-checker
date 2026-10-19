@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Site Health Check</title>
+<meta name="description" content="Free website audit: search visibility, speed, security, mobile and local-business checks with a plain-English fix list.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='14' cy='14' r='9' fill='none' stroke='%232f6fed' stroke-width='4'/><path d='M21 21l7 7' stroke='%232f6fed' stroke-width='4' stroke-linecap='round'/></svg>">
+<style>
+:root{
+  --bg:#f6f7f9;--panel:#fff;--ink:#16181d;--muted:#5d6472;--line:#e3e6eb;
+  --accent:#2f6fed;--pass:#1f9d55;--warn:#d98a00;--fail:#d64545;--info:#6b7280;
+  --pass-bg:#e8f6ee;--warn-bg:#fdf3e1;--fail-bg:#fbeaea;--info-bg:#f0f1f3;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1115;--panel:#181b21;--ink:#eceef2;--muted:#9aa1ad;--line:#2a2f38;
+  --accent:#6b9bff;--pass:#3ccf7d;--warn:#f0b03a;--fail:#ff6b6b;--info:#9aa1ad;
+  --pass-bg:#16301f;--warn-bg:#33270f;--fail-bg:#3a1b1b;--info-bg:#22262d;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+header h1{font-size:28px;margin:8px 0 4px;letter-spacing:-.02em}
+header p{margin:0 0 20px;color:var(--muted)}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input[type=text]{flex:1 1 280px;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)}
+button{font:inherit;font-weight:600;padding:12px 18px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);padding:8px 12px;font-weight:500}
+button:disabled{opacity:.6;cursor:wait}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}
+.err{color:var(--fail);margin-top:14px}
+.top{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center}
+@media (max-width:640px){.top{grid-template-columns:1fr;justify-items:start}}
+.ring{position:relative;width:140px;height:140px}
+.ring svg{transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:38px}
+.ring small{position:absolute;left:0;bottom:30px;width:100%;text-align:center;color:var(--muted);font-size:12px}
+.meta{color:var(--muted);font-size:13px;word-break:break-all}
+.counts{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.pill{padding:3px 10px;border-radius:99px;font-size:13px;font-weight:600}
+.pass{color:var(--pass);background:var(--pass-bg)}.warn{color:var(--warn);background:var(--warn-bg)}
+.fail{color:var(--fail);background:var(--fail-bg)}.info{color:var(--info);background:var(--info-bg)}
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:8px}
+.cat{font-size:13px}.cat .bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}
+.cat .bar i{display:block;height:100%}
+h2{font-size:18px;margin:0 0 12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tabs button{background:transparent;color:var(--muted);border:1px solid var(--line);padding:6px 12px;font-weight:500}
+.tabs button.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.group h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 6px}
+details{border-top:1px solid var(--line);padding:10px 0}
+summary{display:flex;gap:10px;align-items:flex-start;cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+.dot{flex:0 0 22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;margin-top:1px}
+.ct{flex:1}.ct strong{display:block}.ct span{color:var(--muted);font-size:14px;word-break:break-word}
+.body{margin:8px 0 0 32px;font-size:14px}
+.fix{background:var(--bg);border-left:3px solid var(--accent);padding:8px 12px;border-radius:6px;margin:6px 0}
+.body ul{margin:6px 0;padding-left:18px;color:var(--muted);word-break:break-all}
+.serp{font-family:arial,sans-serif;max-width:600px;margin-top:8px}
+.serp .u{font-size:13px;color:var(--muted)}.serp .t{font-size:19px;color:#1a0dab;margin:2px 0}
+@media (prefers-color-scheme:dark){.serp .t{color:#8ab4f8}}
+.serp .d{font-size:14px;color:var(--muted)}
+.speed{display:grid;grid-template-columns:1fr 200px;gap:20px}
+@media (max-width:640px){.speed{grid-template-columns:1fr}}
+.gauges{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.g{text-align:center;font-size:12px;color:var(--muted)}.g b{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;border:4px solid;font-size:18px;color:var(--ink);margin:0 auto 4px}
+table{width:100%;border-collapse:collapse;font-size:14px}td{padding:5px 0;border-top:1px solid var(--line)}td:last-child{text-align:right;font-weight:600}
+.shot{width:100%;border:1px solid var(--line);border-radius:10px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes s{to{transform:rotate(360deg)}}
+.actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+footer{color:var(--muted);font-size:12px;margin-top:30px}
+@media print{
+  body{background:#fff;color:#000}form,.tabs,.actions,footer{display:none}
+  .panel{border:0;padding:0}details{break-inside:avoid}details>.body{display:block}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Site Health Check</h1>
+    <p>Enter any website to get a score and a plain-English list of what's hurting it in Google, on phones, and with customers.</p>
+  </header>
+  <form id="f">
+    <input type="text" id="url" placeholder="example.com" autocomplete="url" required>
+    <button id="go">Run check</button>
+  </form>
+  <div id="err" class="err" hidden></div>
+  <div id="out"></div>
+  <footer>Speed data from Google PageSpeed Insights. Everything else is measured live by this tool.</footer>
+</div>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const color = (n) => n >= 80 ? 'var(--pass)' : n >= 50 ? 'var(--warn)' : 'var(--fail)';
+const ICON = { pass: '✓', warn: '!', fail: '✕', info: 'i' };
+let report = null, filter = 'issues';
+
+$('#f').addEventListener('submit', (e) => { e.preventDefault(); run($('#url').value); });
+const qs = new URLSearchParams(location.search).get('url');
+if (qs) { $('#url').value = qs; run(qs); }
+
+async function run(url) {
+  $('#err').hidden = true;
+  $('#go').disabled = true;
+  $('#out').innerHTML = `<div class="panel"><span class="spin"></span>Checking ${esc(url)}…</div>`;
+  history.replaceState(null, '', '?url=' + encodeURIComponent(url));
+  const speedP = fetch('/api/speed?url=' + encodeURIComponent(url)).then((r) => r.json()).catch(() => ({ error: 'PageSpeed request failed.' }));
+  try {
+    const r = await fetch('/api/audit?url=' + encodeURIComponent(url));
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    report = data;
+    render();
+    speedP.then(renderSpeed);
+  } catch (e) {
+    $('#out').innerHTML = '';
+    $('#err').textContent = e.message;
+    $('#err').hidden = false;
+  } finally {
+    $('#go').disabled = false;
+  }
+}
+
+function render() {
+  const r = report, C = 2 * Math.PI * 60;
+  $('#out').innerHTML = `
+  <div class="panel top">
+    <div class="ring">
+      <svg width="140" height="140"><circle cx="70" cy="70" r="60" fill="none" stroke="var(--line)" stroke-width="12"/>
+      <circle cx="70" cy="70" r="60" fill="none" stroke="${color(r.score)}" stroke-width="12" stroke-linecap="round"
+        stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - r.score / 100)}"/></svg>
+      <b>${r.score}</b><small>out of 100</small>
+    </div>
+    <div>
+      <div class="meta">${esc(r.url)} · checked ${new Date(r.checkedAt).toLocaleString()}</div>
+      <div class="counts">
+        <span class="pill fail">${r.counts.fail} failed</span>
+        <span class="pill warn">${r.counts.warn} warnings</span>
+        <span class="pill pass">${r.counts.pass} passed</span>
+      </div>
+      <div class="cats">${Object.values(r.categories).filter((c) => c.score !== null).map((c) => `
+        <div class="cat">${esc(c.label)} <b style="float:right">${c.score}</b>
+        <div class="bar"><i style="width:${c.score}%;background:${color(c.score)}"></i></div></div>`).join('')}
+      </div>
+      <div class="actions">
+        <button class="ghost" onclick="window.print()">Print / save PDF</button>
+        <button class="ghost" onclick="copySummary(this)">Copy top issues</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="speed"><h2>Speed &amp; Core Web Vitals (mobile)</h2><span class="spin"></span>Running Google Lighthouse; this takes 15–40 seconds…</div>
+  <div class="panel">
+    <h2>Checks</h2>
+    <div class="tabs">${[['issues','Issues'],['fail','Failed'],['warn','Warnings'],['pass','Passed'],['all','All']].map(([k, l]) =>
+      `<button data-f="${k}" class="${k === filter ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div id="checks"></div>
+  </div>`;
+  $('.tabs').addEventListener('click', (e) => {
+    if (!e.target.dataset.f) return;
+    filter = e.target.dataset.f;
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.f === filter));
+    renderChecks();
+  });
+  renderChecks();
+}
+
+function renderChecks() {
+  const show = (c) => filter === 'all' || (filter === 'issues' ? c.status === 'fail' || c.status === 'warn' || c.id === 'serp' : c.status === filter);
+  const order = { fail: 0, warn: 1, info: 2, pass: 3 };
+  const html = Object.entries(report.categories).map(([key, cat]) => {
+    const cs = report.checks.filter((c) => c.cat === key && show(c)).sort((a, b) => order[a.status] - order[b.status] || b.weight - a.weight);
+    if (!cs.length) return '';
+    return `<div class="group"><h3>${esc(cat.label)}</h3>${cs.map(item).join('')}</div>`;
+  }).join('');
+  $('#checks').innerHTML = html || '<p class="meta">Nothing in this view.</p>';
+}
+
+function item(c) {
+  const body = [
+    c.fix && `<div class="fix"><b>How to fix:</b> ${esc(c.fix)}</div>`,
+    c.preview && `<div class="serp"><div class="u">${esc(c.preview.url)}</div><div class="t">${esc(c.preview.title.slice(0, 60))}${c.preview.title.length > 60 ? '…' : ''}</div><div class="d">${esc(c.preview.description.slice(0, 158))}${c.preview.description.length > 158 ? '…' : ''}</div></div>`,
+    c.details?.length && `<ul>${c.details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>`,
+  ].filter(Boolean).join('');
+  return `<details ${c.status === 'fail' || c.preview ? 'open' : ''}><summary><span class="dot ${c.status}">${ICON[c.status]}</span>
+    <span class="ct"><strong>${esc(c.title)}</strong><span>${esc(c.summary)}</span></span></summary>
+    ${body ? `<div class="body">${body}</div>` : ''}</details>`;
+}
+
+let speedCache = null;
+function renderSpeed(s) {
+  speedCache = s;
+  const el = $('#speed');
+  if (!el) return;
+  if (s.error) { el.innerHTML = `<h2>Speed &amp; Core Web Vitals</h2><p class="meta">${esc(s.error)}</p>`; return; }
+  const names = { performance: 'Performance', seo: 'Google SEO', accessibility: 'Accessibility', 'best-practices': 'Best practices' };
+  const field = s.field ? `<p class="meta">Real-visitor data (Chrome users): ${esc(s.field.overall)}${s.field.lcp ? ` · LCP ${(s.field.lcp / 1000).toFixed(1)} s` : ''}${s.field.inp ? ` · INP ${s.field.inp} ms` : ''}${s.field.cls != null ? ` · CLS ${(s.field.cls / 100).toFixed(2)}` : ''}</p>` : '<p class="meta">Not enough real-visitor traffic for Chrome field data; lab results shown.</p>';
+  el.innerHTML = `<h2>Speed &amp; Core Web Vitals (mobile)</h2>
+  <div class="speed"><div>
+    <div class="gauges">${Object.entries(s.scores).map(([k, v]) => `<div class="g"><b style="border-color:${color(v)}">${v}</b>${names[k] || k}</div>`).join('')}</div>
+    <table>${s.metrics.map((m) => `<tr><td>${esc(m.label)}</td><td style="color:${m.score == null ? 'inherit' : color(m.score * 100)}">${esc(m.value || '–')}</td></tr>`).join('')}</table>
+    ${field}
+    ${s.opportunities.length ? `<h3 style="font-size:14px;margin:14px 0 4px">Biggest speed wins</h3><ul style="margin:0;padding-left:18px;font-size:14px">${s.opportunities.map((o) => `<li>${esc(o.title)} <span class="meta">${esc(o.savings)}</span></li>`).join('')}</ul>` : ''}
+  </div>
+  ${s.screenshot ? `<div><img class="shot" src="${s.screenshot}" alt="How the page looks on a phone"><div class="meta" style="text-align:center">Phone view</div></div>` : ''}
+  </div>`;
+}
+
+function copySummary(btn) {
+  const r = report;
+  const issues = r.checks.filter((c) => c.status === 'fail' || c.status === 'warn').sort((a, b) => (a.status === 'fail' ? 0 : 1) - (b.status === 'fail' ? 0 : 1) || b.weight - a.weight).slice(0, 8);
+  const lines = [`Site check for ${r.url}: ${r.score}/100`, '', ...issues.map((c) => `- ${c.title}: ${c.summary}${c.fix ? ' Fix: ' + c.fix : ''}`)];
+  if (speedCache?.scores) lines.push('', `Google mobile performance score: ${speedCache.scores.performance}/100`);
+  navigator.clipboard.writeText(lines.join('\n')).then(() => { btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = 'Copy top issues'), 1500); });
+}
+</script>
+</body>
+</html>
