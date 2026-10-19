@@ -1,5 +1,7 @@
 # Site Health Check: a free SEO audit tool
 
+Live at https://seo-checker-beryl-omega.vercel.app
+
 A small web app that audits any web page and gives a 0–100 score, failed checks,
 warnings, and a plain-English "how to fix" for each one. It covers the core of
 what paid audit sites (like seositecheckup.com's free page audit) check, with
