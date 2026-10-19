@@ -12,6 +12,6 @@ export default async function handler(req, res) {
   } catch (err) {
     res.statusCode = 400;
     const msg = err.name === 'TimeoutError' ? 'The site took too long to respond.' : err.cause?.code === 'ENOTFOUND' ? 'That domain could not be found.' : err.message;
-    res.end(JSON.stringify({ error: msg || 'Could not audit that URL.' }));
+    res.end(JSON.stringify({ error: msg || 'Could not audit that URL.', blocked: !!err.blocked }));
   }
 }

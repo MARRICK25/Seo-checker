@@ -110,7 +110,14 @@ async function run(url) {
   try {
     const r = await fetch('/api/audit?url=' + encodeURIComponent(url));
     const data = await r.json();
-    if (data.error) throw new Error(data.error);
+    if (data.error) {
+      if (data.blocked) {
+        $('#out').innerHTML = `<div class="panel"><p class="err" style="margin:0">${esc(data.error)}</p></div><div class="panel" id="speed"><h2>Speed &amp; Core Web Vitals (mobile)</h2><span class="spin"></span>Running Google Lighthouse; this takes 15–40 seconds…</div>`;
+        speedP.then(renderSpeed);
+        return;
+      }
+      throw new Error(data.error);
+    }
     report = data;
     render();
     speedP.then(renderSpeed);
