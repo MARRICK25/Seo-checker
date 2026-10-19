@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       screenshot: audits['final-screenshot']?.details?.data || null,
     }));
   } catch (err) {
-    res.statusCode = 502;
+    res.statusCode = 200; // the page shows the message; 200 keeps it readable everywhere
     res.end(JSON.stringify({ error: err.name === 'TimeoutError' ? 'PageSpeed took too long.' : err.message }));
   }
 }
