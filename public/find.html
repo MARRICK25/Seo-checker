@@ -83,6 +83,15 @@ footer{color:var(--muted);font-size:12px;margin-top:30px}
     <input type="password" id="pw" placeholder="App password" autocomplete="current-password">
     <button>Unlock</button>
   </form>
+  <details class="panel" id="addBox">
+    <summary style="font-weight:600">Add businesses you found yourself</summary>
+    <p class="muted" style="font-size:14px;margin:10px 0">One business per line. Separate the details with commas, or paste rows straight from a spreadsheet. Any order works; only the name is required. For example:<br><code>Treps Roofing, trepsroofing.com, (609) 555-0142, Trenton, 4.6, 38</code></p>
+    <form id="addf" style="flex-direction:column;align-items:stretch">
+      <input type="text" id="listName" style="flex:none" placeholder="List name, e.g. Roofers Mercer County" value="My list">
+      <textarea id="rows" rows="6" required style="font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)" placeholder="Business name, website, phone, town, rating, reviews"></textarea>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button id="addGo">Add and check websites</button><span id="addMsg" class="muted" style="font-size:14px"></span></div>
+    </form>
+  </details>
   <div id="err" class="err" hidden></div>
   <div id="out"></div>
   <div id="pastBox" class="panel" hidden><h2 style="font-size:16px;margin:0 0 10px">Your searches</h2><ul class="past" id="past"></ul></div>
@@ -168,6 +177,40 @@ async function overpass(q) {
   throw new Error(last);
 }
 
+// Reads one pasted line. Pieces are recognised by what they look like, so order doesn't matter.
+function parseLine(line) {
+  const parts = (line.includes('\t') ? line.split('\t') : line.includes('|') ? line.split('|') : line.split(',')).map((x) => x.trim()).filter(Boolean);
+  const b = {};
+  const text = [];
+  for (const p of parts) {
+    const digits = p.replace(/\D/g, '');
+    if (!b.website && /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(p) && !/^\d+(\.\d+)?$/.test(p)) b.website = p;
+    else if (!b.phone && digits.length >= 10 && digits.length <= 11 && /^[\d\s()+.-]+$/.test(p)) b.phone = p;
+    else if (b.rating == null && /^[0-5](\.\d)?\s*(stars?|★)?$/i.test(p) && (p.includes('.') || /star|★/i.test(p) || text.length)) b.rating = parseFloat(p);
+    else if (b.reviews == null && /^\(?\d{1,5}\)?\s*(reviews?)?$/i.test(p)) b.reviews = parseInt(p.replace(/\D/g, ''), 10);
+    else text.push(p);
+  }
+  b.name = text[0] || '';
+  b.town = text[1] || '';
+  return b;
+}
+
+$('#addf').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const rows = $('#rows').value.split('\n').map((l) => l.trim()).filter(Boolean).map(parseLine).filter((b) => b.name);
+  if (!rows.length) { $('#addMsg').textContent = 'Add at least one line with a business name.'; return; }
+  $('#addGo').disabled = true; $('#addMsg').textContent = `Saving ${rows.length}…`; showErr('');
+  try {
+    state = await api('POST', { action: 'add', list: $('#listName').value, businesses: rows });
+    $('#addMsg').textContent = `Saved: ${state.newIds.length} new, ${state.alreadySeen} already in your lists.`;
+    $('#rows').value = '';
+    view = 'all';
+    history.replaceState(null, '', '?s=' + encodeURIComponent(state.search.key));
+    render(); checkSites(); loadPast();
+  } catch (err) { $('#addMsg').textContent = ''; showErr(err.message); }
+  finally { $('#addGo').disabled = false; }
+});
+
 async function open(key) {
   showErr('');
   try {
@@ -182,7 +225,7 @@ async function open(key) {
 
 function fit(b) {
   if (!b.open) return ['Closed', 'bad', 9];
-  if (b.rating == null && b.source === 'osm') {
+  if (b.rating == null && (b.source === 'osm' || b.source === 'hand')) {
     // Free map data has no reviews: rank on the website alone. Click the name to see Google reviews.
     if (!b.website) return ['No website listed', 'warn', 2];
     if (b.siteScore == null) return b.siteError ? ['Check by hand', 'info', 5] : ['Checking site', 'info', 4];
@@ -220,9 +263,9 @@ function render() {
     <div class="status">
       <div>
         <h2>${esc(s.query)}</h2>
-        <p>${esc(s.area)} · ${s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews) · ' : ''}${`${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
+        <p>${esc(s.area)} · ${s.source === 'hand' ? '' : s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews) · ' : ''}${s.source === 'hand' ? 'your own list' : `${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
       </div>
-      ${s.finished ? '<span class="pill good">Whole area covered</span>' : '<button id="more">Search the next areas</button>'}
+      ${s.source === 'hand' ? '' : s.finished ? '<span class="pill good">Whole area covered</span>' : '<button id="more">Search the next areas</button>'}
     </div>
     ${s.towns.length ? `<div class="towns">Covered so far: ${esc(s.towns.slice(0, 40).join(', '))}${s.towns.length > 40 ? '…' : ''}</div>` : ''}
     <div class="bar">
@@ -326,7 +369,7 @@ async function loadPast() {
   try {
     const { searches } = await api('GET');
     $('#pastBox').hidden = !searches.length;
-    $('#past').innerHTML = searches.map((s) => `<li><button data-k="${esc(s.key)}">${esc(s.query)}</button><span class="muted">${s.total} businesses · ${s.finished ? 'all areas covered' : s.areasLeft + ' areas left'}</span></li>`).join('');
+    $('#past').innerHTML = searches.map((s) => `<li><button data-k="${esc(s.key)}">${esc(s.query)}</button><span class="muted">${s.total} businesses · ${s.source === 'hand' ? 'your own list' : s.finished ? 'all areas covered' : s.areasLeft + ' areas left'}</span></li>`).join('');
     for (const b of $('#past').querySelectorAll('button')) b.addEventListener('click', () => open(b.dataset.k));
   } catch (e) { if (!/password/i.test(e.message)) showErr(e.message); }
 }

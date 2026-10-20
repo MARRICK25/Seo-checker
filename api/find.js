@@ -47,6 +47,51 @@ async function businessesFor(s) {
   return s.ids.map((id) => map[id]).filter(Boolean);
 }
 
+// Businesses you found yourself, saved as a list that works like a search.
+async function addByHand(listName, rows) {
+  const query = String(listName || 'My list').trim().slice(0, 80) || 'My list';
+  const key = 'list-' + keyOf(query);
+  if (!Array.isArray(rows) || !rows.length) throw new Error('Paste at least one business, one per line.');
+  const now = new Date().toISOString();
+  const found = new Map();
+  for (const r of rows.slice(0, 300)) {
+    const name = String(r.name || '').trim().slice(0, 120);
+    if (!name) continue;
+    let website = String(r.website || '').trim();
+    if (website && !/^https?:\/\//i.test(website)) website = 'https://' + website;
+    let host = '';
+    try { host = website ? new URL(website).hostname.replace(/^www\./, '') : ''; } catch { website = ''; }
+    const town = String(r.town || '').trim().slice(0, 60);
+    const id = 'hand:' + (host || keyOf(name + ' ' + town));
+    const rating = r.rating === '' || r.rating == null || isNaN(r.rating) ? null : Math.max(0, Math.min(5, Number(r.rating)));
+    found.set(id, {
+      id, name, town, website, rating,
+      reviews: r.reviews === '' || r.reviews == null || isNaN(r.reviews) ? null : Math.max(0, Math.round(Number(r.reviews))),
+      phone: String(r.phone || '').trim().slice(0, 30), type: '', address: town, open: true, source: 'hand',
+      maps: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([name, town].filter(Boolean).join(' ')),
+    });
+  }
+  if (!found.size) throw new Error('Each line needs at least a business name.');
+  let s = (await getJSON('search:' + key)) || { key, query, source: 'hand', areaLabel: 'Added by hand', cells: [], ids: [], createdAt: now };
+  const ids = [...found.keys()];
+  const known = await hGetMany('biz', ids);
+  const fresh = {};
+  const refreshed = {};
+  for (const [id, b] of found) {
+    if (known[id]) refreshed[id] = { ...known[id], ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== null && v !== '')) };
+    else fresh[id] = { ...b, firstSeen: now, firstSearch: query };
+  }
+  await hSetMany('biz', { ...refreshed, ...fresh });
+  const inList = new Set(s.ids);
+  for (const id of ids) if (!inList.has(id)) s.ids.push(id); // a business you add by hand always shows in the list you added it to
+  s.updatedAt = now;
+  await setJSON('search:' + key, s);
+  const list = (await getJSON('searches')) || [];
+  const entry = summary(s);
+  await setJSON('searches', [entry, ...list.filter((x) => x.key !== key)].slice(0, 50));
+  return { search: entry, newIds: Object.keys(fresh), alreadySeen: ids.length - Object.keys(fresh).length, businesses: await businessesFor(s) };
+}
+
 async function runSearch(query) {
   const { service, location } = parseQuery(query);
   const key = keyOf(query);
@@ -177,6 +222,7 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return send(405, { error: 'Use GET or POST.' });
 
     const body = await readBody(req);
+    if (body.action === 'add') return send(200, await addByHand(body.list, body.businesses));
     if (body.action === 'update') {
       const cur = (await hGetMany('biz', [String(body.id)]))[body.id];
       if (!cur) return send(404, { error: 'Business not found.' });

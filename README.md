@@ -42,6 +42,10 @@ Type a service and a place, like "Roofing contractors in New Jersey". The app:
    and businesses found in any earlier search are counted as "already seen" instead of shown as new.
    Your notes (Interested, Contacted, Skip) and the scores are saved too. Download CSV exports the list.
 
+**Add businesses yourself:** open "Add businesses you found yourself", give the list a name, and paste one
+business per line (name, website, phone, town, rating, reviews, in any order; commas or spreadsheet rows).
+They are saved as a list next to your searches, de-duplicated by website, and their sites are checked and ranked.
+
 ### Setup (once)
 
 1. **Business list source.** With no setup it uses free OpenStreetMap data: no key, no card. That data has
