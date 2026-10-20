@@ -94,7 +94,7 @@ footer{color:var(--muted);font-size:12px;margin-top:30px}
   </details>
   <div id="err" class="err" hidden></div>
   <div id="out"></div>
-  <div id="pastBox" class="panel" hidden><h2 style="font-size:16px;margin:0 0 10px">Your searches</h2><ul class="past" id="past"></ul></div>
+  <div id="pastBox" class="panel" hidden><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><h2 style="font-size:16px;margin:0">Your searches</h2><button class="ghost" id="clientsBtn">Open my clients</button></div><ul class="past" id="past"></ul></div>
   <footer>Business list from Google Maps, or from free OpenStreetMap data when no Google key is set. Site scores come from this app's site check. Fit is a starting guess, not a verdict.</footer>
 </div>
 <script>
@@ -244,12 +244,26 @@ function fit(b) {
 }
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
 
+const STAGES = [['', '—'], ['interested', 'Interested'], ['guideline', 'Guideline done'], ['site', 'Site built'], ['live', 'Site live on Vercel'], ['contacted', 'Emailed'], ['followup1', 'Followed up once'], ['followup2', 'Followed up twice'], ['replied', 'Replied'], ['won', 'Won'], ['skip', 'Skip']];
+const stageName = (m) => (STAGES.find(([v]) => v === (m || '')) || ['', '—'])[1];
+// Follow-ups: 4 days after the first email, then 10 days after it.
+function dueNote(b) {
+  const sent = b.stageDates?.contacted;
+  if (!sent) return '';
+  const days = Math.floor((Date.now() - Date.parse(sent)) / 86400000);
+  if (b.mark === 'contacted' && days >= 4) return `First follow-up due (emailed ${days} days ago)`;
+  if (b.mark === 'followup1' && days >= 10) return `Second follow-up due (emailed ${days} days ago)`;
+  return '';
+}
+
 function rows() {
   const newSet = new Set(state.newIds);
   let list = state.businesses;
   if (view === 'new') list = list.filter((b) => newSet.has(b.id));
+  if (view === 'due') list = list.filter((b) => dueNote(b));
   if (view === 'fits') list = list.filter((b) => ['Strong fit', 'Weak site'].includes(fit(b)[0]) || (fit(b)[0] === 'No website' && fit(b)[1] === 'good'));
-  if (hideDone) list = list.filter((b) => b.mark !== 'contacted' && b.mark !== 'skip');
+  if (hideDone && state.search.source !== 'clients') list = list.filter((b) => !b.mark || b.mark === 'interested');
+  if (state.search.source === 'clients') return list.slice().sort((a, b) => !!dueNote(b) - !!dueNote(a) || STAGES.findIndex(([v]) => v === a.mark) - STAGES.findIndex(([v]) => v === b.mark));
   return list.slice().sort((a, b) => fit(a)[2] - fit(b)[2] || b.reviews - a.reviews);
 }
 
@@ -258,34 +272,37 @@ function render() {
   const newSet = new Set(newIds);
   const fits = businesses.filter((b) => { const f = fit(b); return f[0] === 'Strong fit' || f[0] === 'Weak site' || (f[0] === 'No website' && f[1] === 'good'); }).length;
   const list = rows();
+  const due = businesses.filter((b) => dueNote(b)).length;
+  const isClients = s.source === 'clients';
   $('#out').innerHTML = `
   <div class="panel">
     <div class="status">
       <div>
         <h2>${esc(s.query)}</h2>
-        <p>${esc(s.area)} · ${s.source === 'hand' ? '' : s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews) · ' : ''}${s.source === 'hand' ? 'your own list' : `${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
+        <p>${esc(s.area)} · ${s.source === 'hand' ? '' : s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews) · ' : ''}${isClients ? 'your pipeline' : s.source === 'hand' ? 'your own list' : `${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} ${isClients ? 'clients' : 'businesses saved'}${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
       </div>
-      ${s.source === 'hand' ? '' : s.finished ? '<span class="pill good">Whole area covered</span>' : '<button id="more">Search the next areas</button>'}
+      ${s.source === 'hand' || isClients ? '' : s.finished ? '<span class="pill good">Whole area covered</span>' : '<button id="more">Search the next areas</button>'}
     </div>
     ${s.towns.length ? `<div class="towns">Covered so far: ${esc(s.towns.slice(0, 40).join(', '))}${s.towns.length > 40 ? '…' : ''}</div>` : ''}
     <div class="bar">
       <div class="seg" role="group" aria-label="Show">
-        <button data-v="new" class="${view === 'new' ? 'on' : ''}">New this time (${newIds.length})</button>
-        <button data-v="fits" class="${view === 'fits' ? 'on' : ''}">Best fits (${fits})</button>
+        ${isClients ? '' : `<button data-v="new" class="${view === 'new' ? 'on' : ''}">New this time (${newIds.length})</button>
+        <button data-v="fits" class="${view === 'fits' ? 'on' : ''}">Best fits (${fits})</button>`}
+        ${due ? `<button data-v="due" class="${view === 'due' ? 'on' : ''}">Follow-ups due (${due})</button>` : ''}
         <button data-v="all" class="${view === 'all' ? 'on' : ''}">All (${businesses.length})</button>
       </div>
-      <label class="chk"><input type="checkbox" id="hide" ${hideDone ? 'checked' : ''}> Hide contacted and skipped</label>
+      ${isClients ? '' : `<label class="chk"><input type="checkbox" id="hide" ${hideDone ? 'checked' : ''}> Hide skipped and ones already in progress</label>`}
       <span class="spacer"></span>
       <span id="prog" class="muted" style="font-size:13px"></span>
       <button class="ghost" id="csv">Download CSV</button>
     </div>
     <div class="scroll"><table>
-      <thead><tr><th>Business</th><th>Rating</th><th>Reviews</th><th>Website</th><th>Site score</th><th>Fit</th><th>Your note</th></tr></thead>
+      <thead><tr><th>Business</th><th>Rating</th><th>Reviews</th><th>Website</th><th>Site score</th><th>Fit</th><th>Stage</th></tr></thead>
       <tbody>${list.map((b) => row(b, newSet.has(b.id))).join('') || `<tr><td colspan="7" class="muted">${view === 'new' ? 'Nothing new in this run. Switch to All, or search the next areas.' : 'Nothing to show with these filters.'}</td></tr>`}</tbody>
     </table></div>
   </div>`;
   $('#more')?.addEventListener('click', () => search(s.query));
-  $('#hide').addEventListener('change', (e) => { hideDone = e.target.checked; render(); });
+  $('#hide')?.addEventListener('change', (e) => { hideDone = e.target.checked; render(); });
   $('#csv').addEventListener('click', csv);
   for (const btn of $('#out').querySelectorAll('.seg button')) btn.addEventListener('click', () => { view = btn.dataset.v; render(); });
   for (const sel of $('#out').querySelectorAll('select[data-id]')) sel.addEventListener('change', () => mark(sel.dataset.id, sel.value));
@@ -308,8 +325,8 @@ function row(b, isNew) {
     <td class="num">${score}</td>
     <td><span class="pill ${cls}">${label}</span></td>
     <td><select data-id="${esc(b.id)}" aria-label="Note for ${esc(b.name)}">
-      ${[['', '—'], ['interested', 'Interested'], ['contacted', 'Contacted'], ['skip', 'Skip']].map(([v, t]) => `<option value="${v}" ${(b.mark || '') === v ? 'selected' : ''}>${t}</option>`).join('')}
-    </select></td>
+      ${STAGES.map(([v, t]) => `<option value="${v}" ${(b.mark || '') === v ? 'selected' : ''}>${t}</option>`).join('')}
+    </select>${dueNote(b) ? `<div class="pill warn" style="display:inline-block;margin-top:6px;white-space:normal">${dueNote(b)}</div>` : ''}</td>
   </tr>`;
 }
 
@@ -356,14 +373,16 @@ async function checkSites() {
 }
 
 function csv() {
-  const cols = ['name', 'town', 'phone', 'rating', 'reviews', 'website', 'siteScore', 'fit', 'mark', 'address', 'maps', 'firstSeen'];
+  const cols = ['name', 'town', 'phone', 'rating', 'reviews', 'website', 'siteScore', 'fit', 'stage', 'followUp', 'address', 'maps', 'firstSeen'];
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const lines = [cols.join(',')].concat(rows().map((b) => cols.map((c) => q(c === 'fit' ? fit(b)[0] : b[c])).join(',')));
+  const lines = [cols.join(',')].concat(rows().map((b) => cols.map((c) => q(c === 'fit' ? fit(b)[0] : c === 'stage' ? stageName(b.mark) : c === 'followUp' ? dueNote(b) : b[c])).join(',')));
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
   a.download = state.search.key + '.csv';
   a.click();
 }
+
+$('#clientsBtn').addEventListener('click', () => open('__clients'));
 
 async function loadPast() {
   try {

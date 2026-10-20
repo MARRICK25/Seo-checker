@@ -8,11 +8,12 @@
 // otherwise free OpenStreetMap data (no key or card, no ratings).
 import { findArea, searchBox, splitBox, MIN_BOX_DEG } from '../lib/places.js';
 import { findAreaOsm, searchOsm, nominatimTerms, searchNominatim } from '../lib/osm.js';
-import { getJSON, setJSON, hGetMany, hSetMany } from '../lib/store.js';
+import { getJSON, setJSON, hGetMany, hSetMany, hGetAll } from '../lib/store.js';
 
 const REQUEST_BUDGET = 15; // Google requests per click (one area costs 1-3)
 const OSM_CALLS_PER_CLICK = 30; // free-map lookups per click (about one per second)
-const MARKS = ['', 'interested', 'contacted', 'skip'];
+// Client stages, in pipeline order. 'contacted' means the first email was sent.
+const MARKS = ['', 'interested', 'guideline', 'site', 'live', 'contacted', 'followup1', 'followup2', 'replied', 'won', 'skip'];
 
 function parseQuery(q) {
   const m = String(q || '').trim().match(/^(.+?)\s+(?:in|near|around)\s+(.+)$/i);
@@ -214,6 +215,14 @@ export default async function handler(req, res) {
       const params = new URL(req.url, 'http://x').searchParams;
       if (params.get('check')) return send(200, await checkSearch(params.get('check'), params.get('only')));
       const key = params.get('key');
+      if (key === '__clients') {
+        // Every business you've given a stage, across all searches and lists.
+        const all = Object.values(await hGetAll('biz')).filter((b) => b.mark && b.mark !== 'skip');
+        return send(200, {
+          search: { key, query: 'My clients', area: 'Every business you gave a stage', source: 'clients', areasSearched: 0, areasLeft: 0, total: all.length, finished: true, towns: [] },
+          newIds: [], businesses: all,
+        });
+      }
       if (!key) return send(200, { searches: (await getJSON('searches')) || [] });
       const s = await getJSON('search:' + key);
       if (!s) return send(404, { error: 'That search is not saved.' });
@@ -228,7 +237,10 @@ export default async function handler(req, res) {
       if (!cur) return send(404, { error: 'Business not found.' });
       if ('siteScore' in body) cur.siteScore = body.siteScore === null ? null : Math.max(0, Math.min(100, Number(body.siteScore) || 0));
       if ('siteError' in body) cur.siteError = String(body.siteError || '').slice(0, 300);
-      if ('mark' in body && MARKS.includes(body.mark)) cur.mark = body.mark;
+      if ('mark' in body && MARKS.includes(body.mark) && body.mark !== (cur.mark || '')) {
+        cur.mark = body.mark;
+        cur.stageDates = { ...(cur.stageDates || {}), [body.mark || 'none']: new Date().toISOString() };
+      }
       await hSetMany('biz', { [cur.id]: cur });
       return send(200, { business: cur });
     }
