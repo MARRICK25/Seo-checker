@@ -113,7 +113,7 @@ async function runSearch(query) {
 }
 
 // GET /api/find?check=Roofers in Trenton NJ -> runs one search step by step without saving, to see what fails.
-async function checkSearch(query) {
+async function checkSearch(query, only) {
   const out = { source: process.env.PLACES_API_KEY ? 'google' : 'osm', steps: [] };
   const step = async (name, fn) => {
     const t = Date.now();
@@ -124,6 +124,7 @@ async function checkSearch(query) {
     const { service, location } = await step('read query', async () => parseQuery(query));
     const area = await step('find area', () => (out.source === 'google' ? findArea(location) : findAreaOsm(location)));
     out.area = area;
+    if (only === 'area') return out;
     const list = await step('find businesses', async () => (out.source === 'google' ? (await searchBox(service, area.box)).businesses : searchOsm(service, area)));
     out.count = list.length;
     out.sample = list.slice(0, 5).map((b) => `${b.name} (${b.town || '?'}) ${b.website || 'no website'}`);
@@ -142,7 +143,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const params = new URL(req.url, 'http://x').searchParams;
-      if (params.get('check')) return send(200, await checkSearch(params.get('check')));
+      if (params.get('check')) return send(200, await checkSearch(params.get('check'), params.get('only')));
       const key = params.get('key');
       if (!key) return send(200, { searches: (await getJSON('searches')) || [] });
       const s = await getJSON('search:' + key);
