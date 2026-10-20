@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find Businesses</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='14' cy='14' r='9' fill='none' stroke='%232f6fed' stroke-width='4'/><path d='M21 21l7 7' stroke='%232f6fed' stroke-width='4' stroke-linecap='round'/></svg>">
+<style>
+:root{
+  --bg:#f6f7f9;--panel:#fff;--ink:#16181d;--muted:#5d6472;--line:#e3e6eb;
+  --accent:#2f6fed;--pass:#1f9d55;--warn:#d98a00;--fail:#d64545;--info:#6b7280;
+  --pass-bg:#e8f6ee;--warn-bg:#fdf3e1;--fail-bg:#fbeaea;--info-bg:#f0f1f3;--new:#eef3ff;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1115;--panel:#181b21;--ink:#eceef2;--muted:#9aa1ad;--line:#2a2f38;
+  --accent:#6b9bff;--pass:#3ccf7d;--warn:#f0b03a;--fail:#ff6b6b;--info:#9aa1ad;
+  --pass-bg:#16301f;--warn-bg:#33270f;--fail-bg:#3a1b1b;--info-bg:#22262d;--new:#1a2338;color-scheme:dark;
+}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px 64px}
+nav{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap}
+nav a{padding:6px 12px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:600;font-size:14px}
+nav a.on{background:var(--ink);color:var(--panel)}
+header h1{font-size:28px;margin:8px 0 4px;letter-spacing:-.02em}
+header p{margin:0 0 20px;color:var(--muted);max-width:68ch}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input[type=text],input[type=password]{flex:1 1 280px;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)}
+button{font:inherit;font-weight:600;padding:12px 18px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);padding:6px 12px;font-weight:500}
+button:disabled{opacity:.6;cursor:wait}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-top:18px}
+.err{color:var(--fail);margin-top:14px}
+.muted{color:var(--muted)}
+.status{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.status h2{font-size:18px;margin:0 0 2px}
+.status p{margin:0;color:var(--muted);font-size:14px}
+.towns{font-size:13px;color:var(--muted);margin-top:8px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0 8px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:transparent;color:var(--muted);border-radius:0;padding:7px 12px;font-weight:500;font-size:14px}
+.seg button.on{background:var(--ink);color:var(--panel)}
+label.chk{font-size:14px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.spacer{flex:1}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.new td:first-child{box-shadow:inset 3px 0 var(--accent)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.name strong{display:block}
+.name span{color:var(--muted);font-size:13px}
+.newtag{font-size:11px;font-weight:700;color:var(--accent);background:var(--new);padding:1px 6px;border-radius:99px;margin-left:6px;vertical-align:1px}
+a{color:var(--accent)}
+.pill{padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.good{color:var(--pass);background:var(--pass-bg)}.warn{color:var(--warn);background:var(--warn-bg)}
+.bad{color:var(--fail);background:var(--fail-bg)}.info{color:var(--info);background:var(--info-bg)}
+select{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.past{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.past button{background:transparent;color:var(--accent);padding:0;font-weight:600;text-align:left}
+.past li{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;font-size:14px}
+footer{color:var(--muted);font-size:12px;margin-top:30px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><a href="/find.html" class="on">Find businesses</a><a href="/">Check a site</a></nav>
+  <header>
+    <h1>Find businesses</h1>
+    <p>Describe the service and the place. It finds the businesses on the map, checks each website, and ranks the ones with happy customers but a weak site. Searching the same thing again picks up where it left off and only shows businesses you haven't seen.</p>
+  </header>
+  <form id="f">
+    <input type="text" id="q" placeholder="Roofing contractors in New Jersey" required>
+    <button id="go">Find businesses</button>
+  </form>
+  <form id="pwf" hidden style="margin-top:10px">
+    <input type="password" id="pw" placeholder="App password" autocomplete="current-password">
+    <button>Unlock</button>
+  </form>
+  <div id="err" class="err" hidden></div>
+  <div id="out"></div>
+  <div id="pastBox" class="panel" hidden><h2 style="font-size:16px;margin:0 0 10px">Your searches</h2><ul class="past" id="past"></ul></div>
+  <footer>Business list from Google Maps, or from free OpenStreetMap data when no Google key is set. Site scores come from this app's site check. Fit is a starting guess, not a verdict.</footer>
+</div>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let state = null;       // { search, businesses, newIds }
+let view = 'new';
+let hideDone = true;
+const checking = new Set();
+
+function pw() { try { return localStorage.getItem('appPw') || ''; } catch { return ''; } }
+async function api(method, body, qs = '') {
+  const r = await fetch('/api/find' + qs, {
+    method, headers: { 'Content-Type': 'application/json', 'x-app-password': pw() },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => ({ error: 'The server sent an unreadable answer.' }));
+  if (data.needPassword) { $('#pwf').hidden = false; }
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+function showErr(msg) { $('#err').textContent = msg; $('#err').hidden = !msg; }
+
+$('#pwf').addEventListener('submit', (e) => {
+  e.preventDefault();
+  try { localStorage.setItem('appPw', $('#pw').value); } catch {}
+  $('#pwf').hidden = true; showErr(''); loadPast();
+});
+
+$('#f').addEventListener('submit', (e) => { e.preventDefault(); search($('#q').value); });
+
+async function search(query) {
+  showErr('');
+  $('#go').disabled = true;
+  const prev = state;
+  $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching Google for “${esc(query)}”. Big areas are searched a few sections at a time…</div>` + (prev ? '' : '');
+  try {
+    state = await api('POST', { query });
+    view = state.newIds.length ? 'new' : 'all';
+    history.replaceState(null, '', '?s=' + encodeURIComponent(state.search.key));
+    render();
+    checkSites();
+    loadPast();
+  } catch (e) {
+    showErr(e.message);
+    $('#out').innerHTML = '';
+    if (prev) { state = prev; render(); }
+  } finally { $('#go').disabled = false; }
+}
+
+async function open(key) {
+  showErr('');
+  try {
+    state = await api('GET', null, '?key=' + encodeURIComponent(key));
+    $('#q').value = state.search.query;
+    view = 'all';
+    history.replaceState(null, '', '?s=' + encodeURIComponent(key));
+    render();
+    checkSites();
+  } catch (e) { showErr(e.message); }
+}
+
+function fit(b) {
+  if (!b.open) return ['Closed', 'bad', 9];
+  if (b.rating == null && b.source === 'osm') {
+    // Free map data has no reviews: rank on the website alone. Click the name to see Google reviews.
+    if (!b.website) return ['No website', 'warn', 2];
+    if (b.siteScore == null) return b.siteError ? ['Check by hand', 'info', 5] : ['Checking site', 'info', 4];
+    if (b.siteScore >= 85) return ['Already strong', 'warn', 7];
+    if (b.siteScore < 65) return ['Weak site', 'good', 0];
+    return ['Maybe', 'info', 6];
+  }
+  const goodRep = b.rating >= 4.3 && b.reviews >= 15;
+  const weakRep = b.rating == null || b.rating < 3.8 || b.reviews < 5;
+  if (!b.website) return goodRep ? ['No website', 'good', 1] : weakRep ? ['Skip', 'bad', 8] : ['No website', 'warn', 3];
+  if (b.siteScore == null) return b.siteError ? ['Check by hand', 'info', 5] : ['Checking site', 'info', 4];
+  if (weakRep) return ['Skip', 'bad', 8];
+  if (b.siteScore >= 85) return ['Already strong', 'warn', 7];
+  if (goodRep && b.siteScore < 75) return ['Strong fit', 'good', 0];
+  return ['Maybe', 'info', 6];
+}
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+
+function rows() {
+  const newSet = new Set(state.newIds);
+  let list = state.businesses;
+  if (view === 'new') list = list.filter((b) => newSet.has(b.id));
+  if (view === 'fits') list = list.filter((b) => ['Strong fit', 'Weak site'].includes(fit(b)[0]) || (fit(b)[0] === 'No website' && fit(b)[1] === 'good'));
+  if (hideDone) list = list.filter((b) => b.mark !== 'contacted' && b.mark !== 'skip');
+  return list.slice().sort((a, b) => fit(a)[2] - fit(b)[2] || b.reviews - a.reviews);
+}
+
+function render() {
+  const { search: s, businesses, newIds } = state;
+  const newSet = new Set(newIds);
+  const fits = businesses.filter((b) => { const f = fit(b); return f[0] === 'Strong fit' || f[0] === 'Weak site' || (f[0] === 'No website' && f[1] === 'good'); }).length;
+  const list = rows();
+  $('#out').innerHTML = `
+  <div class="panel">
+    <div class="status">
+      <div>
+        <h2>${esc(s.query)}</h2>
+        <p>${esc(s.area)} · ${${s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews)' : `${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
+      </div>
+      ${s.finished ? '<span class="pill good">Whole area covered</span>' : '<button id="more">Search the next areas</button>'}
+    </div>
+    ${s.towns.length ? `<div class="towns">Covered so far: ${esc(s.towns.slice(0, 40).join(', '))}${s.towns.length > 40 ? '…' : ''}</div>` : ''}
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Show">
+        <button data-v="new" class="${view === 'new' ? 'on' : ''}">New this time (${newIds.length})</button>
+        <button data-v="fits" class="${view === 'fits' ? 'on' : ''}">Best fits (${fits})</button>
+        <button data-v="all" class="${view === 'all' ? 'on' : ''}">All (${businesses.length})</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="hide" ${hideDone ? 'checked' : ''}> Hide contacted and skipped</label>
+      <span class="spacer"></span>
+      <span id="prog" class="muted" style="font-size:13px"></span>
+      <button class="ghost" id="csv">Download CSV</button>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>Business</th><th>Rating</th><th>Reviews</th><th>Website</th><th>Site score</th><th>Fit</th><th>Your note</th></tr></thead>
+      <tbody>${list.map((b) => row(b, newSet.has(b.id))).join('') || `<tr><td colspan="7" class="muted">${view === 'new' ? 'Nothing new in this run. Switch to All, or search the next areas.' : 'Nothing to show with these filters.'}</td></tr>`}</tbody>
+    </table></div>
+  </div>`;
+  $('#more')?.addEventListener('click', () => search(s.query));
+  $('#hide').addEventListener('change', (e) => { hideDone = e.target.checked; render(); });
+  $('#csv').addEventListener('click', csv);
+  for (const btn of $('#out').querySelectorAll('.seg button')) btn.addEventListener('click', () => { view = btn.dataset.v; render(); });
+  for (const sel of $('#out').querySelectorAll('select[data-id]')) sel.addEventListener('change', () => mark(sel.dataset.id, sel.value));
+  for (const btn of $('#out').querySelectorAll('button[data-recheck]')) btn.addEventListener('click', () => checkOne(state.businesses.find((b) => b.id === btn.dataset.recheck)));
+  progress();
+}
+
+function row(b, isNew) {
+  const [label, cls] = fit(b);
+  const score = !b.website ? '<span class="muted">–</span>'
+    : checking.has(b.id) ? '<span class="spin"></span>'
+    : b.siteScore != null ? `<a href="/?url=${encodeURIComponent(b.website)}" target="_blank" rel="noopener">${b.siteScore}/100</a>`
+    : b.siteError ? `<button class="ghost" data-recheck="${esc(b.id)}" title="${esc(b.siteError)}">Retry</button>`
+    : '<span class="muted">queued</span>';
+  return `<tr class="${isNew ? 'new' : ''}">
+    <td class="name"><strong>${b.maps ? `<a href="${esc(b.maps)}" target="_blank" rel="noopener">${esc(b.name)}</a>` : esc(b.name)}${isNew ? '<span class="newtag">NEW</span>' : ''}</strong><span>${esc([b.town, b.phone].filter(Boolean).join(' · '))}</span></td>
+    <td class="num">${b.rating != null ? b.rating.toFixed(1) : '–'}</td>
+    <td class="num">${b.reviews ?? '–'}</td>
+    <td>${b.website ? `<a href="${esc(b.website)}" target="_blank" rel="noopener">${esc(host(b.website))}</a>` : '<span class="muted">None</span>'}</td>
+    <td class="num">${score}</td>
+    <td><span class="pill ${cls}">${label}</span></td>
+    <td><select data-id="${esc(b.id)}" aria-label="Note for ${esc(b.name)}">
+      ${[['', '—'], ['interested', 'Interested'], ['contacted', 'Contacted'], ['skip', 'Skip']].map(([v, t]) => `<option value="${v}" ${(b.mark || '') === v ? 'selected' : ''}>${t}</option>`).join('')}
+    </select></td>
+  </tr>`;
+}
+
+function progress() {
+  const left = state.businesses.filter((b) => b.website && b.siteScore == null && !b.siteError).length;
+  const el = $('#prog');
+  if (el) el.textContent = left ? `Checking websites: ${left} to go` : '';
+}
+
+async function mark(id, value) {
+  try {
+    const { business } = await api('POST', { action: 'update', id, mark: value });
+    Object.assign(state.businesses.find((b) => b.id === id), business);
+    render();
+  } catch (e) { showErr(e.message); }
+}
+
+async function checkOne(b) {
+  if (!b || checking.has(b.id)) return;
+  checking.add(b.id); render();
+  let update;
+  try {
+    const r = await fetch('/api/audit?url=' + encodeURIComponent(b.website));
+    const data = await r.json();
+    update = data.error ? { siteScore: null, siteError: data.error } : { siteScore: data.score, siteError: '' };
+  } catch { update = { siteScore: null, siteError: 'The site check did not answer.' }; }
+  checking.delete(b.id);
+  Object.assign(b, update);
+  render();
+  api('POST', { action: 'update', id: b.id, ...update }).catch(() => {});
+}
+
+// Check sites three at a time, new businesses first.
+let running = false;
+async function checkSites() {
+  if (running) return;
+  running = true;
+  const newSet = new Set(state.newIds);
+  const todo = () => state.businesses.filter((b) => b.website && b.siteScore == null && !b.siteError && !checking.has(b.id))
+    .sort((a, b) => newSet.has(b.id) - newSet.has(a.id));
+  const worker = async () => { let b; while ((b = todo()[0])) await checkOne(b); };
+  await Promise.all([worker(), worker(), worker()]);
+  running = false;
+}
+
+function csv() {
+  const cols = ['name', 'town', 'phone', 'rating', 'reviews', 'website', 'siteScore', 'fit', 'mark', 'address', 'maps', 'firstSeen'];
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [cols.join(',')].concat(rows().map((b) => cols.map((c) => q(c === 'fit' ? fit(b)[0] : b[c])).join(',')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+  a.download = state.search.key + '.csv';
+  a.click();
+}
+
+async function loadPast() {
+  try {
+    const { searches } = await api('GET');
+    $('#pastBox').hidden = !searches.length;
+    $('#past').innerHTML = searches.map((s) => `<li><button data-k="${esc(s.key)}">${esc(s.query)}</button><span class="muted">${s.total} businesses · ${s.finished ? 'all areas covered' : s.areasLeft + ' areas left'}</span></li>`).join('');
+    for (const b of $('#past').querySelectorAll('button')) b.addEventListener('click', () => open(b.dataset.k));
+  } catch (e) { if (!/password/i.test(e.message)) showErr(e.message); }
+}
+
+loadPast();
+const startKey = new URLSearchParams(location.search).get('s');
+if (startKey) open(startKey);
+</script>
+</body>
+</html>

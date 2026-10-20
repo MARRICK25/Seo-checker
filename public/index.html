@@ -70,14 +70,18 @@ table{width:100%;border-collapse:collapse;font-size:14px}td{padding:5px 0;border
 @keyframes s{to{transform:rotate(360deg)}}
 .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 footer{color:var(--muted);font-size:12px;margin-top:30px}
+nav{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap}
+nav a{padding:6px 12px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:600;font-size:14px}
+nav a.on{background:var(--ink);color:var(--panel)}
 @media print{
-  body{background:#fff;color:#000}form,.tabs,.actions,footer{display:none}
+  body{background:#fff;color:#000}form,nav,.tabs,.actions,footer{display:none}
   .panel{border:0;padding:0}details{break-inside:avoid}details>.body{display:block}
 }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <nav><a href="/find.html">Find businesses</a><a href="/" class="on">Check a site</a></nav>
   <header>
     <h1>Site Health Check</h1>
     <p>Enter any website to get a score and a plain-English list of what's hurting it in Google, on phones, and with customers.</p>

@@ -28,6 +28,35 @@ Report extras: **Print / save PDF** (clean print layout to send to a prospect),
 **Copy top issues** (a short text summary to paste into an email), and shareable
 links (`https://your-app.vercel.app/?url=dhroof.com` runs the check on open).
 
+## Find businesses (`/find.html`)
+
+Type a service and a place, like "Roofing contractors in New Jersey". The app:
+
+1. Gets the businesses from OpenStreetMap (free) or Google Maps (if `PLACES_API_KEY` is set). Google returns at most 60 per search, so big areas
+   are split into map sections: a section that comes back full is cut into four smaller ones.
+   Each click searches the next few sections (up to 15 Google requests, about 15 seconds).
+2. Runs this app's site check on every website it finds (three at a time) and saves the score.
+3. Ranks them. **Strong fit** means 4.3+ stars, 15+ reviews and a site score under 75.
+   **No website** with good reviews is also a strong lead. Fit is a starting guess.
+4. Remembers everything. Running the same search again continues with the sections not searched yet,
+   and businesses found in any earlier search are counted as "already seen" instead of shown as new.
+   Your notes (Interested, Contacted, Skip) and the scores are saved too. Download CSV exports the list.
+
+### Setup (once)
+
+1. **Business list source.** With no setup it uses free OpenStreetMap data: no key, no card. That data has
+   no star ratings or review counts and misses some small businesses, so fit is based on the website alone
+   (click a name to open its Google reviews). Whole-state searches can be slow there; if one times out, search
+   by county or town. **Optional, better data:** Google Maps (ratings, reviews, more businesses). Create a Google
+   Cloud project, enable **"Places API (New)"** (Google requires a regular credit or debit card on billing, not a
+   prepaid card), create an API key, and add it in Vercel as `PLACES_API_KEY`. When that's set, the finder
+   switches to Google automatically. Set a daily quota cap under Places API (New) → Quotas to avoid surprise charges.
+2. **Give it memory.** In Vercel open the project → **Storage** → **Create / Connect** → **Upstash for Redis**
+   (free plan) → connect it to this project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically.
+   Redeploy. Without it the finder shows "Memory is not set up yet". Locally it saves to `.data/memory.json` instead.
+3. **Recommended: add a password.** Add `APP_PASSWORD` in Vercel → Settings → Environment Variables and redeploy.
+   Otherwise anyone who finds the link could use your Google allowance and see your lead list.
+
 ## Not included (needs paid data)
 
 These features on paid SEO sites depend on large commercial datasets, so they are left out:
@@ -67,6 +96,8 @@ npm run dev        # http://localhost:3000
 
 - `public/index.html` is the whole front end (no build step).
 - `api/audit.js` is the endpoint `GET /api/audit?url=...`, which returns the JSON report.
+- `public/find.html` is the business finder page.
+- `api/find.js` is the finder endpoint (search, saved searches, notes); `lib/places.js` talks to Google Maps and splits areas; `lib/osm.js` is the free OpenStreetMap search; `lib/store.js` is the memory (Upstash Redis, or a local file).
 - `api/speed.js` is the endpoint `GET /api/speed?url=...&strategy=mobile|desktop`, a PageSpeed Insights wrapper.
 - `lib/extra-checks.js` holds broken links, minification, HTTP/2 and Safe Browsing (they make extra requests).
 - `lib/audit.js` holds all the other checks. Each one is a `check(...)` call, so adding one is a few lines.
