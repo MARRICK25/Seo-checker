@@ -53,7 +53,7 @@ Type a service and a place, like "Roofing contractors in New Jersey". The app:
    switches to Google automatically. Set a daily quota cap under Places API (New) → Quotas to avoid surprise charges.
 2. **Give it memory.** In Vercel open the project → **Storage** → **Create / Connect** → **Upstash for Redis**
    (free plan) → connect it to this project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically.
-   Redeploy. Without it the finder shows "Memory is not set up yet". Locally it saves to `.data/memory.json` instead.
+   Redeploy (or push any commit to GitHub, which redeploys automatically). Without it the finder shows "Memory is not set up yet". Locally it saves to `.data/memory.json` instead.
 3. **Recommended: add a password.** Add `APP_PASSWORD` in Vercel → Settings → Environment Variables and redeploy.
    Otherwise anyone who finds the link could use your Google allowance and see your lead list.
 
