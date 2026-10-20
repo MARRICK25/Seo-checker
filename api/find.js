@@ -7,7 +7,7 @@
 // Uses Google Maps when PLACES_API_KEY is set (ratings, reviews, best coverage),
 // otherwise free OpenStreetMap data (no key or card, no ratings).
 import { findArea, searchBox, splitBox, MIN_BOX_DEG } from '../lib/places.js';
-import { findAreaOsm, searchOsm, osmQuery, businessesFromElements, tileBox, TILE_DEG } from '../lib/osm.js';
+import { findAreaOsm, searchOsm, osmQuery, businessesFromElements, tileBox, TILE_DEG, nominatimTerms, searchNominatim } from '../lib/osm.js';
 import { getJSON, setJSON, hGetMany, hSetMany } from '../lib/store.js';
 
 const REQUEST_BUDGET = 15; // Google requests per click (one area costs 1-3)
@@ -137,6 +137,14 @@ async function checkSearch(query, only) {
     const area = await step('find area', () => (out.source === 'google' ? findArea(location) : findAreaOsm(location)));
     out.area = area;
     if (only === 'area') return out;
+    if (only === 'names') {
+      const terms = nominatimTerms(service);
+      out.terms = terms;
+      const res = await step('name search', () => searchNominatim(terms[0], area.box));
+      out.count = res.businesses.length; out.full = res.full;
+      out.sample = res.businesses.slice(0, 8).map((b) => `${b.name} (${b.town || '?'}) ${b.website || 'no website'} ${b.phone}`);
+      return out;
+    }
     const list = await step('find businesses', async () => (out.source === 'google' ? (await searchBox(service, area.box)).businesses : searchOsm(service, area)));
     out.count = list.length;
     out.sample = list.slice(0, 5).map((b) => `${b.name} (${b.town || '?'}) ${b.website || 'no website'}`);
