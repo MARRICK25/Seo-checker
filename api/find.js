@@ -7,11 +7,11 @@
 // Uses Google Maps when PLACES_API_KEY is set (ratings, reviews, best coverage),
 // otherwise free OpenStreetMap data (no key or card, no ratings).
 import { findArea, searchBox, splitBox, MIN_BOX_DEG } from '../lib/places.js';
-import { findAreaOsm, searchOsm, osmQuery, businessesFromElements, tileBox, TILE_DEG, nominatimTerms, searchNominatim } from '../lib/osm.js';
+import { findAreaOsm, searchOsm, nominatimTerms, searchNominatim } from '../lib/osm.js';
 import { getJSON, setJSON, hGetMany, hSetMany } from '../lib/store.js';
 
 const REQUEST_BUDGET = 15; // Google requests per click (one area costs 1-3)
-const OSM_TILES_PER_CLICK = 6; // free-map sections the browser searches per click
+const OSM_CALLS_PER_CLICK = 30; // free-map lookups per click (about one per second)
 const MARKS = ['', 'interested', 'contacted', 'skip'];
 
 function parseQuery(q) {
@@ -47,7 +47,7 @@ async function businessesFor(s) {
   return s.ids.map((id) => map[id]).filter(Boolean);
 }
 
-async function runSearch(query, batches) {
+async function runSearch(query) {
   const { service, location } = parseQuery(query);
   const key = keyOf(query);
   const source = process.env.PLACES_API_KEY ? 'google' : 'osm';
@@ -61,25 +61,29 @@ async function runSearch(query, batches) {
   let budget = REQUEST_BUDGET;
   const found = new Map();
   if (source === 'osm') {
-    // Big boxes are cut into map sections; the browser searches a few per click.
-    if (s.cells.some((c) => c.state === 'todo' && (c.box.n - c.box.s > TILE_DEG * 1.01 || c.box.e - c.box.w > TILE_DEG * 1.01))) {
-      s.cells = s.cells.flatMap((c) => (c.state === 'todo' ? tileBox(c.box).map((box) => ({ box, state: 'todo' })) : [c]));
-    }
-    if (!Array.isArray(batches)) {
-      const todo = s.cells.map((c, i) => [c, i]).filter(([c]) => c.state === 'todo').slice(0, OSM_TILES_PER_CLICK);
-      if (todo.length) {
-        await setJSON('search:' + key, s);
-        return { osm: { batches: todo.map(([c, i]) => ({ cell: i, query: osmQuery(s.service, { box: c.box }) })) } };
+    // Free map: name search per box. A box with 40 results (the most Nominatim
+    // returns) is split in four for the next run, like the Google search.
+    const terms = nominatimTerms(s.service);
+    let calls = OSM_CALLS_PER_CLICK;
+    while (calls >= terms.length) {
+      const cell = s.cells.find((c) => c.state === 'todo');
+      if (!cell) break;
+      let full = false;
+      const list = [];
+      for (const t of terms) {
+        const r = await searchNominatim(t, cell.box);
+        calls--;
+        list.push(...r.businesses);
+        full ||= r.full;
       }
-    } else {
-      for (const { cell: i, elements } of batches) {
-        const cell = s.cells[i];
-        if (!cell || cell.state !== 'todo' || !Array.isArray(elements)) continue;
-        const list = businessesFromElements(elements);
-        for (const b of list) found.set(b.id, b);
-        const towns = list.map((b) => b.town).filter(Boolean);
-        Object.assign(cell, { state: 'done', found: list.length, label: towns.sort((a, b) => towns.filter((t) => t === b).length - towns.filter((t) => t === a).length)[0] || '' });
-      }
+      for (const b of list) found.set(b.id, b);
+      const towns = list.map((b) => b.town).filter(Boolean);
+      cell.label = towns.sort((x, y) => towns.filter((t) => t === y).length - towns.filter((t) => t === x).length)[0] || '';
+      cell.found = list.length;
+      if (full && cell.box.n - cell.box.s > MIN_BOX_DEG) {
+        cell.state = 'split';
+        s.cells.push(...splitBox(cell.box).map((box) => ({ box, state: 'todo' })));
+      } else cell.state = 'done';
     }
     budget = 0;
   }
@@ -182,7 +186,7 @@ export default async function handler(req, res) {
       await hSetMany('biz', { [cur.id]: cur });
       return send(200, { business: cur });
     }
-    return send(200, await runSearch(body.query, body.batches));
+    return send(200, await runSearch(body.query));
   } catch (err) {
     send(400, { error: err.name === 'TimeoutError' ? 'Google took too long to answer. Try again.' : err.message });
   }

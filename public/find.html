@@ -121,7 +121,7 @@ async function search(query) {
   showErr('');
   $('#go').disabled = true;
   const prev = state;
-  $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching for “${esc(query)}”…</div>`;
+  $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching for “${esc(query)}”. This takes up to a minute…</div>`;
   try {
     let res = await api('POST', { query });
     if (res.osm) {
@@ -184,7 +184,7 @@ function fit(b) {
   if (!b.open) return ['Closed', 'bad', 9];
   if (b.rating == null && b.source === 'osm') {
     // Free map data has no reviews: rank on the website alone. Click the name to see Google reviews.
-    if (!b.website) return ['No website', 'warn', 2];
+    if (!b.website) return ['No website listed', 'warn', 2];
     if (b.siteScore == null) return b.siteError ? ['Check by hand', 'info', 5] : ['Checking site', 'info', 4];
     if (b.siteScore >= 85) return ['Already strong', 'warn', 7];
     if (b.siteScore < 65) return ['Weak site', 'good', 0];

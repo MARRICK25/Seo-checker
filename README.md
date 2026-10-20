@@ -32,7 +32,7 @@ links (`https://your-app.vercel.app/?url=dhroof.com` runs the check on open).
 
 Type a service and a place, like "Roofing contractors in New Jersey". The app:
 
-1. Gets the businesses from OpenStreetMap (free) or Google Maps (if `PLACES_API_KEY` is set). Google returns at most 60 per search, so big areas
+1. Gets the businesses from OpenStreetMap through its Nominatim name search (free) or Google Maps (if `PLACES_API_KEY` is set). Google returns at most 60 per search, so big areas
    are split into map sections: a section that comes back full is cut into four smaller ones.
    Each click searches the next few sections (up to 15 Google requests, about 15 seconds).
 2. Runs this app's site check on every website it finds (three at a time) and saves the score.
@@ -46,8 +46,8 @@ Type a service and a place, like "Roofing contractors in New Jersey". The app:
 
 1. **Business list source.** With no setup it uses free OpenStreetMap data: no key, no card. That data has
    no star ratings or review counts and misses some small businesses, so fit is based on the website alone
-   (click a name to open its Google reviews). Whole-state searches can be slow there; if one times out, search
-   by county or town. **Optional, better data:** Google Maps (ratings, reviews, more businesses). Create a Google
+   (click a name to open its Google reviews). Each click searches up to 30 map boxes (about 30 seconds);
+   click "Search the next areas" to continue a big area. **Optional, better data:** Google Maps (ratings, reviews, more businesses). Create a Google
    Cloud project, enable **"Places API (New)"** (Google requires a regular credit or debit card on billing, not a
    prepaid card), create an API key, and add it in Vercel as `PLACES_API_KEY`. When that's set, the finder
    switches to Google automatically. Set a daily quota cap under Places API (New) → Quotas to avoid surprise charges.
