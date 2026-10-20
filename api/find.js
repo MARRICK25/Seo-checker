@@ -7,7 +7,7 @@
 // Uses Google Maps when PLACES_API_KEY is set (ratings, reviews, best coverage),
 // otherwise free OpenStreetMap data (no key or card, no ratings).
 import { findArea, searchBox, splitBox, MIN_BOX_DEG } from '../lib/places.js';
-import { findAreaOsm, searchOsm } from '../lib/osm.js';
+import { findAreaOsm, searchOsm, osmQuery, businessesFromElements } from '../lib/osm.js';
 import { getJSON, setJSON, hGetMany, hSetMany } from '../lib/store.js';
 
 const REQUEST_BUDGET = 15; // Google requests per click (one area costs 1-3)
@@ -46,7 +46,7 @@ async function businessesFor(s) {
   return s.ids.map((id) => map[id]).filter(Boolean);
 }
 
-async function runSearch(query) {
+async function runSearch(query, elements) {
   const { service, location } = parseQuery(query);
   const key = keyOf(query);
   const source = process.env.PLACES_API_KEY ? 'google' : 'osm';
@@ -62,8 +62,13 @@ async function runSearch(query) {
   if (source === 'osm') {
     // One request covers the whole area.
     const cell = s.cells.find((c) => c.state === 'todo');
+    if (cell && !Array.isArray(elements)) {
+      // The browser runs this map query, then sends the results back with `elements`.
+      await setJSON('search:' + key, s);
+      return { osm: { query: osmQuery(s.service, { box: cell.box, areaId: s.areaId }) } };
+    }
     if (cell) {
-      const list = await searchOsm(s.service, { box: cell.box, areaId: s.areaId });
+      const list = businessesFromElements(elements);
       for (const b of list) found.set(b.id, b);
       Object.assign(cell, { state: 'done', found: list.length, label: '' });
       const towns = [...new Set(list.map((b) => b.town).filter(Boolean))];
@@ -162,7 +167,7 @@ export default async function handler(req, res) {
       await hSetMany('biz', { [cur.id]: cur });
       return send(200, { business: cur });
     }
-    return send(200, await runSearch(body.query));
+    return send(200, await runSearch(body.query, body.elements));
   } catch (err) {
     send(400, { error: err.name === 'TimeoutError' ? 'Google took too long to answer. Try again.' : err.message });
   }

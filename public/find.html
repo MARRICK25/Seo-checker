@@ -121,9 +121,14 @@ async function search(query) {
   showErr('');
   $('#go').disabled = true;
   const prev = state;
-  $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching Google for “${esc(query)}”. Big areas are searched a few sections at a time…</div>` + (prev ? '' : '');
+  $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching for “${esc(query)}”…</div>`;
   try {
-    state = await api('POST', { query });
+    let res = await api('POST', { query });
+    if (res.osm) {
+      $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching the free map for “${esc(query)}”. A whole county or state can take up to a minute…</div>`;
+      res = await api('POST', { query, elements: await overpass(res.osm.query) });
+    }
+    state = res;
     view = state.newIds.length ? 'new' : 'all';
     history.replaceState(null, '', '?s=' + encodeURIComponent(state.search.key));
     render();
@@ -134,6 +139,24 @@ async function search(query) {
     $('#out').innerHTML = '';
     if (prev) { state = prev; render(); }
   } finally { $('#go').disabled = false; }
+}
+
+// Free map search runs from the browser: the map servers limit cloud servers like Vercel's.
+async function overpass(q) {
+  const servers = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+  let last = 'The free map service did not answer.';
+  for (const url of servers) {
+    try {
+      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(100000) });
+      if (r.status === 429) { last = 'The free map service is busy right now. Wait a minute and try again.'; continue; }
+      if (!r.ok) { last = `The free map service answered ${r.status}. Try a smaller area, like a county or town.`; continue; }
+      const data = await r.json();
+      return (data.elements || []).map(({ type, id, tags }) => ({ type, id, tags }));
+    } catch (e) {
+      last = e.name === 'TimeoutError' ? 'The free map service took too long. Try a smaller area, like a county or town.' : 'Could not reach the free map service. Check your connection and try again.';
+    }
+  }
+  throw new Error(last);
 }
 
 async function open(key) {
@@ -188,7 +211,7 @@ function render() {
     <div class="status">
       <div>
         <h2>${esc(s.query)}</h2>
-        <p>${esc(s.area)} · ${${s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews)' : `${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
+        <p>${esc(s.area)} · ${s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews)' : `${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
       </div>
       ${s.finished ? '<span class="pill good">Whole area covered</span>' : '<button id="more">Search the next areas</button>'}
     </div>
