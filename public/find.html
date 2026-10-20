@@ -125,8 +125,16 @@ async function search(query) {
   try {
     let res = await api('POST', { query });
     if (res.osm) {
-      $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching the free map for “${esc(query)}”. A whole county or state can take up to a minute…</div>`;
-      res = await api('POST', { query, elements: await overpass(res.osm.query) });
+      // Search each map section in the browser, then save what came back.
+      const done = [];
+      let failure = '';
+      for (const [n, b] of res.osm.batches.entries()) {
+        $('#out').innerHTML = `<div class="panel"><span class="spin"></span> Searching the free map for “${esc(query)}”: section ${n + 1} of ${res.osm.batches.length}…</div>`;
+        try { done.push({ cell: b.cell, elements: await overpass(b.query) }); } catch (e) { failure = e.message; break; }
+      }
+      if (!done.length) throw new Error(failure);
+      res = await api('POST', { query, batches: done });
+      if (failure) showErr(failure + ' The sections that finished are saved; click "Search the next areas" to retry.');
     }
     state = res;
     view = state.newIds.length ? 'new' : 'all';
@@ -147,13 +155,13 @@ async function overpass(q) {
   let last = 'The free map service did not answer.';
   for (const url of servers) {
     try {
-      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(100000) });
+      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(70000) });
       if (r.status === 429) { last = 'The free map service is busy right now. Wait a minute and try again.'; continue; }
       if (!r.ok) { last = `The free map service answered ${r.status}. Try a smaller area, like a county or town.`; continue; }
       const data = await r.json();
       return (data.elements || []).map(({ type, id, tags }) => ({ type, id, tags }));
     } catch (e) {
-      last = e.name === 'TimeoutError' ? 'The free map service took too long. Try a smaller area, like a county or town.' : 'Could not reach the free map service. Check your connection and try again.';
+      last = e.name === 'TimeoutError' ? 'The free map service took too long on this section.' : 'Could not reach the free map service. Check your connection and try again.';
     }
   }
   throw new Error(last);
@@ -211,7 +219,7 @@ function render() {
     <div class="status">
       <div>
         <h2>${esc(s.query)}</h2>
-        <p>${esc(s.area)} · ${s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews)' : `${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
+        <p>${esc(s.area)} · ${s.source === 'osm' ? 'free map data (no ratings; click a name for Google reviews) · ' : ''}${`${s.areasSearched} area${s.areasSearched === 1 ? '' : 's'} searched${s.finished ? ', all covered' : `, ${s.areasLeft} left`}`} · ${s.total} businesses saved${state.alreadySeen != null ? ` · this run: ${newIds.length} new, ${state.alreadySeen} already seen` : ''}</p>
       </div>
       ${s.finished ? '<span class="pill good">Whole area covered</span>' : '<button id="more">Search the next areas</button>'}
     </div>

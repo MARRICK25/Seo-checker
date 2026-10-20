@@ -7,10 +7,11 @@
 // Uses Google Maps when PLACES_API_KEY is set (ratings, reviews, best coverage),
 // otherwise free OpenStreetMap data (no key or card, no ratings).
 import { findArea, searchBox, splitBox, MIN_BOX_DEG } from '../lib/places.js';
-import { findAreaOsm, searchOsm, osmQuery, businessesFromElements } from '../lib/osm.js';
+import { findAreaOsm, searchOsm, osmQuery, businessesFromElements, tileBox, TILE_DEG } from '../lib/osm.js';
 import { getJSON, setJSON, hGetMany, hSetMany } from '../lib/store.js';
 
 const REQUEST_BUDGET = 15; // Google requests per click (one area costs 1-3)
+const OSM_TILES_PER_CLICK = 6; // free-map sections the browser searches per click
 const MARKS = ['', 'interested', 'contacted', 'skip'];
 
 function parseQuery(q) {
@@ -35,7 +36,7 @@ function summary(s) {
     areasLeft: s.cells.filter((c) => c.state === 'todo').length,
     total: s.ids.length,
     finished: !s.cells.some((c) => c.state === 'todo'),
-    towns: s.osmTowns || [...new Set(done.map((c) => c.label).filter(Boolean))],
+    towns: [...new Set([...(s.osmTowns || []), ...done.map((c) => c.label)].filter(Boolean))],
     source: s.source || 'google',
     updatedAt: s.updatedAt,
   };
@@ -46,7 +47,7 @@ async function businessesFor(s) {
   return s.ids.map((id) => map[id]).filter(Boolean);
 }
 
-async function runSearch(query, elements) {
+async function runSearch(query, batches) {
   const { service, location } = parseQuery(query);
   const key = keyOf(query);
   const source = process.env.PLACES_API_KEY ? 'google' : 'osm';
@@ -60,19 +61,25 @@ async function runSearch(query, elements) {
   let budget = REQUEST_BUDGET;
   const found = new Map();
   if (source === 'osm') {
-    // One request covers the whole area.
-    const cell = s.cells.find((c) => c.state === 'todo');
-    if (cell && !Array.isArray(elements)) {
-      // The browser runs this map query, then sends the results back with `elements`.
-      await setJSON('search:' + key, s);
-      return { osm: { query: osmQuery(s.service, { box: cell.box, areaId: s.areaId }) } };
+    // Big boxes are cut into map sections; the browser searches a few per click.
+    if (s.cells.some((c) => c.state === 'todo' && (c.box.n - c.box.s > TILE_DEG * 1.01 || c.box.e - c.box.w > TILE_DEG * 1.01))) {
+      s.cells = s.cells.flatMap((c) => (c.state === 'todo' ? tileBox(c.box).map((box) => ({ box, state: 'todo' })) : [c]));
     }
-    if (cell) {
-      const list = businessesFromElements(elements);
-      for (const b of list) found.set(b.id, b);
-      Object.assign(cell, { state: 'done', found: list.length, label: '' });
-      const towns = [...new Set(list.map((b) => b.town).filter(Boolean))];
-      s.osmTowns = towns.slice(0, 60);
+    if (!Array.isArray(batches)) {
+      const todo = s.cells.map((c, i) => [c, i]).filter(([c]) => c.state === 'todo').slice(0, OSM_TILES_PER_CLICK);
+      if (todo.length) {
+        await setJSON('search:' + key, s);
+        return { osm: { batches: todo.map(([c, i]) => ({ cell: i, query: osmQuery(s.service, { box: c.box }) })) } };
+      }
+    } else {
+      for (const { cell: i, elements } of batches) {
+        const cell = s.cells[i];
+        if (!cell || cell.state !== 'todo' || !Array.isArray(elements)) continue;
+        const list = businessesFromElements(elements);
+        for (const b of list) found.set(b.id, b);
+        const towns = list.map((b) => b.town).filter(Boolean);
+        Object.assign(cell, { state: 'done', found: list.length, label: towns.sort((a, b) => towns.filter((t) => t === b).length - towns.filter((t) => t === a).length)[0] || '' });
+      }
     }
     budget = 0;
   }
@@ -167,7 +174,7 @@ export default async function handler(req, res) {
       await hSetMany('biz', { [cur.id]: cur });
       return send(200, { business: cur });
     }
-    return send(200, await runSearch(body.query, body.elements));
+    return send(200, await runSearch(body.query, body.batches));
   } catch (err) {
     send(400, { error: err.name === 'TimeoutError' ? 'Google took too long to answer. Try again.' : err.message });
   }
