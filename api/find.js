@@ -112,6 +112,25 @@ async function runSearch(query) {
   return { search: entry, newIds: Object.keys(fresh), alreadySeen: ids.length - Object.keys(fresh).length, businesses: await businessesFor(s) };
 }
 
+// GET /api/find?check=Roofers in Trenton NJ -> runs one search step by step without saving, to see what fails.
+async function checkSearch(query) {
+  const out = { source: process.env.PLACES_API_KEY ? 'google' : 'osm', steps: [] };
+  const step = async (name, fn) => {
+    const t = Date.now();
+    try { const r = await fn(); out.steps.push({ name, ok: true, ms: Date.now() - t }); return r; }
+    catch (e) { out.steps.push({ name, ok: false, ms: Date.now() - t, error: e.message }); throw e; }
+  };
+  try {
+    const { service, location } = await step('read query', async () => parseQuery(query));
+    const area = await step('find area', () => (out.source === 'google' ? findArea(location) : findAreaOsm(location)));
+    out.area = area;
+    const list = await step('find businesses', async () => (out.source === 'google' ? (await searchBox(service, area.box)).businesses : searchOsm(service, area)));
+    out.count = list.length;
+    out.sample = list.slice(0, 5).map((b) => `${b.name} (${b.town || '?'}) ${b.website || 'no website'}`);
+  } catch {}
+  return out;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
@@ -122,7 +141,9 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const key = new URL(req.url, 'http://x').searchParams.get('key');
+      const params = new URL(req.url, 'http://x').searchParams;
+      if (params.get('check')) return send(200, await checkSearch(params.get('check')));
+      const key = params.get('key');
       if (!key) return send(200, { searches: (await getJSON('searches')) || [] });
       const s = await getJSON('search:' + key);
       if (!s) return send(404, { error: 'That search is not saved.' });
