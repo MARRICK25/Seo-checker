@@ -8,7 +8,7 @@
 // otherwise free OpenStreetMap data (no key or card, no ratings).
 import { findArea, searchBox, splitBox, MIN_BOX_DEG } from '../lib/places.js';
 import { findAreaOsm, searchOsm, nominatimTerms, searchNominatim } from '../lib/osm.js';
-import { getJSON, setJSON, hGetMany, hSetMany, hGetAll, hDel } from '../lib/store.js';
+import { getJSON, setJSON, hGetMany, hSetMany, hGetAll, hDel, del } from '../lib/store.js';
 
 const REQUEST_BUDGET = 15; // Google requests per click (one area costs 1-3)
 const OSM_CALLS_PER_CLICK = 30; // free-map lookups per click (about one per second)
@@ -93,12 +93,21 @@ async function addByHand(listName, rows) {
   return { search: entry, newIds: Object.keys(fresh), alreadySeen: ids.length - Object.keys(fresh).length, businesses: await businessesFor(s) };
 }
 
-// Only businesses you added by hand can be deleted; map results come back on the next search anyway.
-async function deleteByHand(id) {
+// Hand-added businesses that no list holds any more and that have no stage are forgotten.
+async function forgetOrphans(ids, lists) {
+  const held = new Set();
+  for (const x of lists) for (const id of ((await getJSON('search:' + x.key))?.ids || [])) held.add(id);
+  const cand = ids.filter((id) => id.startsWith('hand:') && !held.has(id));
+  const cur = await hGetMany('biz', cand);
+  await hDel('biz', cand.filter((id) => cur[id] && !cur[id].mark));
+}
+
+// Removes a business from one of your own lists (or, with no list, from all of them).
+async function deleteBusiness(id, listKey) {
   id = String(id || '');
-  if (!id.startsWith('hand:')) throw new Error('Only businesses you added yourself can be deleted.');
   const list = (await getJSON('searches')) || [];
-  const keys = list.filter((x) => x.key.startsWith('list-')).map((x) => x.key);
+  const keys = listKey ? [String(listKey)] : list.filter((x) => x.key.startsWith('list-')).map((x) => x.key);
+  if (!keys.every((k) => k.startsWith('list-'))) throw new Error('Only businesses in your own lists can be deleted.');
   const changed = {};
   for (const key of keys) {
     const s = await getJSON('search:' + key);
@@ -108,9 +117,21 @@ async function deleteByHand(id) {
     await setJSON('search:' + key, s);
     changed[key] = summary(s);
   }
-  await hDel('biz', [id]);
   await setJSON('searches', list.map((x) => changed[x.key] || x));
+  await forgetOrphans([id], list);
   return { deleted: id };
+}
+
+// Deletes a whole list or saved search. Businesses with a stage stay in My clients.
+async function deleteList(key) {
+  key = String(key || '');
+  const s = await getJSON('search:' + key);
+  if (!s) throw new Error('That list is already gone.');
+  const rest = ((await getJSON('searches')) || []).filter((x) => x.key !== key);
+  await del('search:' + key);
+  await setJSON('searches', rest);
+  await forgetOrphans(s.ids, rest);
+  return { deletedList: key };
 }
 
 async function runSearch(query) {
@@ -252,7 +273,8 @@ export default async function handler(req, res) {
 
     const body = await readBody(req);
     if (body.action === 'add') return send(200, await addByHand(body.list, body.businesses));
-    if (body.action === 'delete') return send(200, await deleteByHand(body.id));
+    if (body.action === 'delete') return send(200, await deleteBusiness(body.id, body.list));
+    if (body.action === 'deleteList') return send(200, await deleteList(body.key));
     if (body.action === 'update') {
       const cur = (await hGetMany('biz', [String(body.id)]))[body.id];
       if (!cur) return send(404, { error: 'Business not found.' });
