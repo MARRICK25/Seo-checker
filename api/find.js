@@ -8,7 +8,7 @@
 // otherwise free OpenStreetMap data (no key or card, no ratings).
 import { findArea, searchBox, splitBox, MIN_BOX_DEG } from '../lib/places.js';
 import { findAreaOsm, searchOsm, nominatimTerms, searchNominatim } from '../lib/osm.js';
-import { getJSON, setJSON, hGetMany, hSetMany, hGetAll } from '../lib/store.js';
+import { getJSON, setJSON, hGetMany, hSetMany, hGetAll, hDel } from '../lib/store.js';
 
 const REQUEST_BUDGET = 15; // Google requests per click (one area costs 1-3)
 const OSM_CALLS_PER_CLICK = 30; // free-map lookups per click (about one per second)
@@ -91,6 +91,26 @@ async function addByHand(listName, rows) {
   const entry = summary(s);
   await setJSON('searches', [entry, ...list.filter((x) => x.key !== key)].slice(0, 50));
   return { search: entry, newIds: Object.keys(fresh), alreadySeen: ids.length - Object.keys(fresh).length, businesses: await businessesFor(s) };
+}
+
+// Only businesses you added by hand can be deleted; map results come back on the next search anyway.
+async function deleteByHand(id) {
+  id = String(id || '');
+  if (!id.startsWith('hand:')) throw new Error('Only businesses you added yourself can be deleted.');
+  const list = (await getJSON('searches')) || [];
+  const keys = list.filter((x) => x.key.startsWith('list-')).map((x) => x.key);
+  const changed = {};
+  for (const key of keys) {
+    const s = await getJSON('search:' + key);
+    if (!s || !s.ids.includes(id)) continue;
+    s.ids = s.ids.filter((x) => x !== id);
+    s.updatedAt = new Date().toISOString();
+    await setJSON('search:' + key, s);
+    changed[key] = summary(s);
+  }
+  await hDel('biz', [id]);
+  await setJSON('searches', list.map((x) => changed[x.key] || x));
+  return { deleted: id };
 }
 
 async function runSearch(query) {
@@ -232,6 +252,7 @@ export default async function handler(req, res) {
 
     const body = await readBody(req);
     if (body.action === 'add') return send(200, await addByHand(body.list, body.businesses));
+    if (body.action === 'delete') return send(200, await deleteByHand(body.id));
     if (body.action === 'update') {
       const cur = (await hGetMany('biz', [String(body.id)]))[body.id];
       if (!cur) return send(404, { error: 'Business not found.' });
